@@ -1,9 +1,13 @@
+def enscope(f, args):
+    return lambda: f(*args)
 
 def pegTaxesToInflation(scenario, tax, firstYear, lastYear, deflator):
     initialIncomeBrackets = tax.federalIncomeBrackets
     initialCapitalGainsBrackets = tax.federalCapitalGainsBrackets
     initialDeduction = tax.federalDeduction
     initialSocialSecurityCap = tax.socialSecurityWageBase
+    initial401kCap = tax.k401Limit
+    initialIraCap = tax.iraLimit
     for year in xrange(firstYear, lastYear+1):
         incomeBrackets = []
         for bracket in initialIncomeBrackets:
@@ -13,10 +17,17 @@ def pegTaxesToInflation(scenario, tax, firstYear, lastYear, deflator):
             gainsBrackets.append((bracket[0]*deflator(year), bracket[1]))
         deduction = initialDeduction*deflator(year)
         scenario.addEvent("%d-01-01" % year,
-                lambda: tax.setFederalTax(incomeBrackets, gainsBrackets, deduction))
+                enscope(tax.setFederalTax, [incomeBrackets, gainsBrackets, deduction]))
+        socialSecurityCap = initialSocialSecurityCap*deflator(year)
         scenario.addEvent("%d-01-01" % year,
-                lambda: tax.setSocialSecurityTax(
-                    tax.socialSecurityRate, initialSocialSecurityCap*deflator(year)))
+                enscope(tax.setSocialSecurityTax, [tax.socialSecurityRate, socialSecurityCap]))
+
+def pegRetirementContributionsToInflation(
+        scenario, tax, base401k, baseIra, firstYear, lastYear, deflator):
+    for year in xrange(firstYear, lastYear+1):
+        k401 = base401k*deflator(year)
+        ira = baseIra*deflator(year)
+        scenario.addEvent("%d-01-01" % year, enscope(tax.setRetirementLimits, [k401, ira]))
 
 def growIncome(scenario, initialDeflatedIncome, rate, deflator, firstYear, lastYear, month=1):
     for year in xrange(firstYear, lastYear+1):
